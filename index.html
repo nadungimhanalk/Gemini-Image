@@ -1,0 +1,573 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Generate Images with Gemini 3 Pro</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono&family=Permanent+Marker&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="index.css" />
+    <script type="importmap">
+      {
+        "imports": {
+          "@google/genai": "https://esm.sh/@google/genai@^1.4.0",
+          "react/": "https://aistudiocdn.com/react@^19.1.1/",
+          "react": "https://aistudiocdn.com/react@^19.1.1",
+          "react-dom/": "https://aistudiocdn.com/react-dom@^19.1.1/",
+          "framer-motion": "https://aistudiocdn.com/framer-motion@^11.3.12"
+        }
+      }
+    </script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <!-- Add JSZip for bulk downloads -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ['Inter', 'sans-serif'],
+              mono: ['JetBrains Mono', 'monospace'],
+            },
+            colors: {
+              gray: {
+                850: '#1f2937',
+                900: '#111827',
+                950: '#0B0C0E', // Deeper background
+              }
+            }
+          }
+        }
+      }
+    </script>
+  </head>
+  <body class="bg-gray-950 font-sans text-gray-300 antialiased selection:bg-blue-500/30 selection:text-blue-200">
+    <div
+      class="min-h-screen flex flex-col items-center justify-center p-4 lg:p-8"
+      role="main"
+    >
+      <div class="w-full max-w-7xl space-y-6 mb-20"> <!-- Added mb-20 for banner space -->
+        
+        <!-- Header -->
+        <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-white/5 pb-6">
+          <div>
+             <h1 class="text-3xl md:text-4xl font-bold text-white tracking-tight flex items-center gap-3">
+              <span class="bg-clip-text text-transparent bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400">Gemini & Veo</span>
+              <span class="text-gray-600 font-normal text-2xl">|</span>
+              <span class="text-xl md:text-2xl font-light text-gray-400">Creative Studio</span>
+            </h1>
+            <p class="text-gray-500 mt-2 text-sm md:text-base">
+              Create high-fidelity images with Gemini 3 Pro and cinematic videos with Veo 3.
+            </p>
+          </div>
+          <div class="flex items-center gap-3 bg-white/5 rounded-full px-4 py-1.5 border border-white/5">
+             <div class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
+             <span class="text-xs font-medium text-gray-300 uppercase tracking-wider">System Online</span>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+          
+          <!-- Left Column: Controls (5 columns wide) -->
+          <div class="lg:col-span-5 space-y-6 flex flex-col h-full">
+            
+            <!-- Main Card -->
+            <div class="bg-[#131416] border border-white/10 rounded-2xl p-6 shadow-xl backdrop-blur-sm space-y-6 flex-1 flex flex-col">
+                
+                <!-- Media Type Selector -->
+                <div class="bg-[#1c1e21] p-1 rounded-xl border border-gray-700 flex relative">
+                    <div id="media-indicator" class="absolute top-1 left-1 bottom-1 w-[calc(50%-4px)] bg-[#2a2d33] rounded-lg border border-gray-600 shadow-sm transition-all duration-300"></div>
+                    <button id="media-image" class="flex-1 relative z-10 py-2.5 text-center text-sm font-semibold text-white transition-colors flex items-center justify-center gap-2">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
+                        Image Studio
+                    </button>
+                    <button id="media-video" class="flex-1 relative z-10 py-2.5 text-center text-sm font-semibold text-gray-400 hover:text-white transition-colors flex items-center justify-center gap-2">
+                         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m22 8-6 4 6 4V8Z"/><rect width="14" height="12" x="2" y="6" rx="2" ry="2"/></svg>
+                        Veo Video
+                    </button>
+                    <input type="hidden" id="current-media-type" value="image">
+                </div>
+
+                <!-- Prompt Section -->
+                <div class="space-y-3">
+                    <div class="flex justify-between items-center">
+                        <label for="prompt-input" class="text-xs font-semibold text-gray-400 uppercase tracking-widest">Prompt</label>
+                        <span id="bulk-helper-text" class="hidden text-[10px] text-cyan-400 bg-cyan-500/10 px-1.5 py-0.5 rounded">One prompt per line</span>
+                    </div>
+                    <div class="relative group">
+                        <textarea
+                            id="prompt-input"
+                            rows="4"
+                            class="w-full bg-[#1c1e21] border border-gray-700 rounded-xl p-4 text-white placeholder-gray-500 focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all duration-200 resize-none leading-relaxed shadow-inner"
+                            placeholder="Describe your imagination..."
+                            aria-label="Generation prompt"
+                        ></textarea>
+                        
+                        <!-- Enhance Button inside Textarea -->
+                        <button id="enhance-prompt-button" class="absolute bottom-3 right-3 text-xs bg-white/5 hover:bg-blue-600 hover:text-white text-gray-400 border border-white/10 px-3 py-1.5 rounded-lg transition-all duration-200 flex items-center gap-1.5 backdrop-blur-md group-focus-within:border-blue-500/30" title="Enhance prompt with Gemini">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L12 3Z"/><path d="M5 3v4"/><path d="M19 17v4"/><path d="M3 5h4"/><path d="M17 19h4"/></svg>
+                            <span>Enhance</span>
+                        </button>
+                    </div>
+
+                    <!-- Negative Prompt Toggle -->
+                     <div>
+                        <button id="negative-prompt-toggle" class="text-[11px] font-medium text-gray-500 hover:text-red-400 flex items-center gap-1.5 transition-colors focus:outline-none">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="transition-transform duration-200" id="neg-toggle-icon"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                            Add Negative Prompt
+                        </button>
+                        <div id="negative-prompt-container" class="hidden mt-2">
+                             <input type="text" id="negative-prompt-input" class="w-full bg-[#1c1e21] border border-gray-700 border-red-900/30 focus:border-red-500/50 rounded-lg px-3 py-2 text-xs text-white placeholder-gray-600 focus:outline-none focus:ring-1 focus:ring-red-500/20 transition-all" placeholder="Elements to exclude (e.g. blur, low quality, distortion)...">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Settings Grid (Aspect Ratio & Size) -->
+                <div class="grid grid-cols-2 gap-6">
+                    <!-- Aspect Ratio -->
+                    <div class="space-y-3">
+                        <label class="text-xs font-semibold text-gray-400 uppercase tracking-widest flex justify-between items-center">
+                            Aspect Ratio
+                            <span id="ar-help-text" class="text-[9px] text-purple-400 bg-purple-500/10 px-1.5 py-0.5 rounded hidden">Veo: 16:9 / 9:16</span>
+                        </label>
+                        <div class="grid grid-cols-5 gap-2" id="aspect-ratio-options">
+                            <!-- 1:1 -->
+                            <div class="relative ar-option" data-media="image" title="Square (1:1)">
+                                <input type="radio" id="ratio-1-1" name="aspect-ratio" value="1:1" class="hidden peer" checked>
+                                <label for="ratio-1-1" class="flex flex-col items-center justify-center w-full aspect-square rounded-lg border border-gray-700 bg-[#1c1e21] cursor-pointer hover:border-gray-500 hover:bg-[#25282c] peer-checked:border-blue-500 peer-checked:bg-blue-500/10 peer-checked:text-blue-400 transition-all">
+                                    <div class="w-3 h-3 border-2 border-current rounded-sm"></div>
+                                </label>
+                            </div>
+                            <!-- 4:3 -->
+                            <div class="relative ar-option" data-media="image" title="Standard (4:3)">
+                                <input type="radio" id="ratio-4-3" name="aspect-ratio" value="4:3" class="hidden peer">
+                                <label for="ratio-4-3" class="flex flex-col items-center justify-center w-full aspect-square rounded-lg border border-gray-700 bg-[#1c1e21] cursor-pointer hover:border-gray-500 hover:bg-[#25282c] peer-checked:border-blue-500 peer-checked:bg-blue-500/10 peer-checked:text-blue-400 transition-all">
+                                    <div class="w-4 h-3 border-2 border-current rounded-sm"></div>
+                                </label>
+                            </div>
+                            <!-- 3:4 -->
+                            <div class="relative ar-option" data-media="image" title="Portrait (3:4)">
+                                <input type="radio" id="ratio-3-4" name="aspect-ratio" value="3:4" class="hidden peer">
+                                <label for="ratio-3-4" class="flex flex-col items-center justify-center w-full aspect-square rounded-lg border border-gray-700 bg-[#1c1e21] cursor-pointer hover:border-gray-500 hover:bg-[#25282c] peer-checked:border-blue-500 peer-checked:bg-blue-500/10 peer-checked:text-blue-400 transition-all">
+                                    <div class="w-3 h-4 border-2 border-current rounded-sm"></div>
+                                </label>
+                            </div>
+                            <!-- 16:9 -->
+                            <div class="relative ar-option" data-media="all" title="Wide (16:9)">
+                                <input type="radio" id="ratio-16-9" name="aspect-ratio" value="16:9" class="hidden peer">
+                                <label for="ratio-16-9" class="flex flex-col items-center justify-center w-full aspect-square rounded-lg border border-gray-700 bg-[#1c1e21] cursor-pointer hover:border-gray-500 hover:bg-[#25282c] peer-checked:border-blue-500 peer-checked:bg-blue-500/10 peer-checked:text-blue-400 transition-all">
+                                    <div class="w-5 h-3 border-2 border-current rounded-sm"></div>
+                                </label>
+                            </div>
+                            <!-- 9:16 -->
+                            <div class="relative ar-option" data-media="all" title="Tall (9:16)">
+                                <input type="radio" id="ratio-9-16" name="aspect-ratio" value="9:16" class="hidden peer">
+                                <label for="ratio-9-16" class="flex flex-col items-center justify-center w-full aspect-square rounded-lg border border-gray-700 bg-[#1c1e21] cursor-pointer hover:border-gray-500 hover:bg-[#25282c] peer-checked:border-blue-500 peer-checked:bg-blue-500/10 peer-checked:text-blue-400 transition-all">
+                                    <div class="w-3 h-5 border-2 border-current rounded-sm"></div>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Image Size (Image Mode Only) -->
+                    <div id="image-size-control" class="space-y-3">
+                        <label class="text-xs font-semibold text-gray-400 uppercase tracking-widest">Image Quality</label>
+                        <div class="flex gap-2 bg-[#1c1e21] p-1 rounded-lg border border-gray-700">
+                             <div class="flex-1">
+                                <input type="radio" id="size-1k" name="image-size" value="1K" class="hidden peer" checked>
+                                <label for="size-1k" class="block text-center text-xs font-medium py-2 rounded-md cursor-pointer text-gray-400 hover:text-white peer-checked:bg-[#2a2d33] peer-checked:text-blue-400 peer-checked:shadow-sm transition-all">1K</label>
+                            </div>
+                            <div class="flex-1">
+                                <input type="radio" id="size-2k" name="image-size" value="2K" class="hidden peer">
+                                <label for="size-2k" class="block text-center text-xs font-medium py-2 rounded-md cursor-pointer text-gray-400 hover:text-white peer-checked:bg-[#2a2d33] peer-checked:text-blue-400 peer-checked:shadow-sm transition-all">2K</label>
+                            </div>
+                        </div>
+                    </div>
+
+                     <!-- Video Resolution (Video Mode Only) -->
+                     <div id="video-res-control" class="space-y-3 hidden">
+                        <label class="text-xs font-semibold text-purple-400 uppercase tracking-widest">Video Resolution</label>
+                        <div class="flex gap-2 bg-[#1c1e21] p-1 rounded-lg border border-gray-700">
+                             <div class="flex-1">
+                                <input type="radio" id="res-720p" name="video-res" value="720p" class="hidden peer">
+                                <label for="res-720p" class="block text-center text-xs font-medium py-2 rounded-md cursor-pointer text-gray-400 hover:text-white peer-checked:bg-[#2a2d33] peer-checked:text-purple-400 peer-checked:shadow-sm transition-all">720p</label>
+                            </div>
+                            <div class="flex-1">
+                                <input type="radio" id="res-1080p" name="video-res" value="1080p" class="hidden peer" checked>
+                                <label for="res-1080p" class="block text-center text-xs font-medium py-2 rounded-md cursor-pointer text-gray-400 hover:text-white peer-checked:bg-[#2a2d33] peer-checked:text-purple-400 peer-checked:shadow-sm transition-all">1080p</label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="h-px bg-white/10 my-4"></div>
+
+                <!-- Generation Mode Selector -->
+                <div class="space-y-3">
+                    <label class="text-xs font-semibold text-gray-400 uppercase tracking-widest">Generation Mode</label>
+                    <div class="grid grid-cols-2 lg:grid-cols-4 gap-2">
+                        
+                        <!-- IMAGE MODES -->
+                        <!-- Standard Mode -->
+                        <div class="relative mode-option image-mode">
+                            <input type="radio" id="mode-standard" name="generation-mode" value="standard" class="hidden peer" checked>
+                            <label for="mode-standard" class="flex flex-col items-center justify-center p-3 rounded-xl border border-gray-700 bg-[#1c1e21] cursor-pointer hover:border-gray-500 transition-all peer-checked:border-blue-500 peer-checked:bg-blue-500/10 peer-checked:text-blue-400 text-gray-400 h-full">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mb-2"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
+                                <span class="text-[10px] font-medium uppercase text-center">Standard</span>
+                            </label>
+                        </div>
+
+                         <!-- Bulk Mode (NEW) -->
+                        <div class="relative mode-option image-mode">
+                            <input type="radio" id="mode-bulk" name="generation-mode" value="bulk" class="hidden peer">
+                            <label for="mode-bulk" class="flex flex-col items-center justify-center p-3 rounded-xl border border-gray-700 bg-[#1c1e21] cursor-pointer hover:border-gray-500 transition-all peer-checked:border-cyan-500 peer-checked:bg-cyan-500/10 peer-checked:text-cyan-400 text-gray-400 h-full">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mb-2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+                                <span class="text-[10px] font-medium uppercase text-center">Bulk Prompts</span>
+                            </label>
+                        </div>
+                        
+                        <!-- Clothing Mode -->
+                        <div class="relative mode-option image-mode">
+                            <input type="radio" id="mode-clothing" name="generation-mode" value="clothing" class="hidden peer">
+                            <label for="mode-clothing" class="flex flex-col items-center justify-center p-3 rounded-xl border border-gray-700 bg-[#1c1e21] cursor-pointer hover:border-gray-500 transition-all peer-checked:border-pink-500 peer-checked:bg-pink-500/10 peer-checked:text-pink-400 text-gray-400 h-full">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mb-2"><path d="M20.38 3.46 16 2a4 4 0 0 1-8 0L3.62 3.46a2 2 0 0 0-1.34 2.23l.58 3.47a1 1 0 0 0 .99.84H6v10c0 1.1.9 2 2 2h8a2 2 0 0 0 2-2V10h2.15a1 1 0 0 0 .99-.84l.58-3.47a2 2 0 0 0-1.34-2.23z"/></svg>
+                                <span class="text-[10px] font-medium uppercase text-center">Clothing</span>
+                            </label>
+                        </div>
+
+                        <!-- Product Mode -->
+                        <div class="relative mode-option image-mode">
+                            <input type="radio" id="mode-product" name="generation-mode" value="product" class="hidden peer">
+                            <label for="mode-product" class="flex flex-col items-center justify-center p-3 rounded-xl border border-gray-700 bg-[#1c1e21] cursor-pointer hover:border-gray-500 transition-all peer-checked:border-green-500 peer-checked:bg-green-500/10 peer-checked:text-green-400 text-gray-400 h-full">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mb-2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+                                <span class="text-[10px] font-medium uppercase text-center">Product</span>
+                            </label>
+                        </div>
+
+                         <!-- Nail Art Mode -->
+                        <div class="relative mode-option image-mode">
+                            <input type="radio" id="mode-nail" name="generation-mode" value="nail" class="hidden peer">
+                            <label for="mode-nail" class="flex flex-col items-center justify-center p-3 rounded-xl border border-gray-700 bg-[#1c1e21] cursor-pointer hover:border-gray-500 transition-all peer-checked:border-rose-500 peer-checked:bg-rose-500/10 peer-checked:text-rose-400 text-gray-400 h-full">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mb-2"><path d="M18 6 6 18"/><path d="m8 6 10 12"/><path d="M22 6v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6"/></svg>
+                                <span class="text-[10px] font-medium uppercase text-center">Nail Art</span>
+                            </label>
+                        </div>
+
+                        <!-- VIDEO MODES (Initially Hidden) -->
+                        <!-- Video Standard -->
+                        <div class="relative mode-option video-mode hidden">
+                            <input type="radio" id="mode-video-standard" name="generation-mode" value="video-standard" class="hidden peer">
+                            <label for="mode-video-standard" class="flex flex-col items-center justify-center p-3 rounded-xl border border-gray-700 bg-[#1c1e21] cursor-pointer hover:border-gray-500 transition-all peer-checked:border-purple-500 peer-checked:bg-purple-500/10 peer-checked:text-purple-400 text-gray-400 h-full">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mb-2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+                                <span class="text-[10px] font-medium uppercase text-center">Video Standard</span>
+                            </label>
+                        </div>
+
+                        <!-- Video Shop -->
+                        <div class="relative mode-option video-mode hidden">
+                            <input type="radio" id="mode-video-shop" name="generation-mode" value="video-shop" class="hidden peer">
+                            <label for="mode-video-shop" class="flex flex-col items-center justify-center p-3 rounded-xl border border-gray-700 bg-[#1c1e21] cursor-pointer hover:border-gray-500 transition-all peer-checked:border-yellow-500 peer-checked:bg-yellow-500/10 peer-checked:text-yellow-400 text-gray-400 h-full">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mb-2"><path d="m22 8-6 4 6 4V8Z"/><rect width="14" height="12" x="2" y="6" rx="2" ry="2"/><path d="M7 12h.01"/><path d="M12 12h.01"/></svg>
+                                <span class="text-[10px] font-medium uppercase text-center">Shop Mode</span>
+                            </label>
+                        </div>
+
+                    </div>
+
+                    <!-- Garment Upload (Conditional: Clothing Mode) -->
+                    <div id="garment-upload-section" class="mt-4 pt-4 border-t border-gray-700 hidden">
+                        <label class="text-xs font-semibold text-pink-400 uppercase tracking-widest mb-2 block">Garment Reference</label>
+                        <div class="relative group">
+                            <!-- Preview -->
+                            <div id="garment-image-preview-container" class="hidden relative w-full h-40 bg-black/40 rounded-lg overflow-hidden border border-gray-600 group-hover:border-gray-500 transition-colors">
+                                <img id="garment-image-preview" class="w-full h-full object-contain p-2" alt="Garment" />
+                                <button id="clear-garment-image" class="absolute top-2 right-2 bg-black/70 text-white p-1.5 rounded-full hover:bg-red-500 transition-colors">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                                </button>
+                            </div>
+                            <!-- Upload Button -->
+                            <label for="garment-image-upload" class="flex flex-col items-center justify-center w-full h-24 border border-dashed border-pink-500/30 rounded-lg cursor-pointer bg-pink-500/5 hover:bg-pink-500/10 transition-all hover:border-pink-500/50">
+                                <div class="flex items-center gap-2 text-pink-400">
+                                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
+                                    <span class="text-xs font-medium">Upload Garment</span>
+                                </div>
+                                <input id="garment-image-upload" type="file" class="hidden" accept="image/*" />
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Product Upload (Conditional: Product Mode & Video Shop Mode) -->
+                    <div id="product-upload-section" class="mt-4 pt-4 border-t border-gray-700 hidden">
+                        <label class="text-xs font-semibold text-green-400 uppercase tracking-widest mb-2 block">Product Reference</label>
+                        <div class="relative group">
+                            <!-- Preview -->
+                            <div id="product-image-preview-container" class="hidden relative w-full h-40 bg-black/40 rounded-lg overflow-hidden border border-gray-600 group-hover:border-gray-500 transition-colors">
+                                <img id="product-image-preview" class="w-full h-full object-contain p-2" alt="Product" />
+                                <button id="clear-product-image" class="absolute top-2 right-2 bg-black/70 text-white p-1.5 rounded-full hover:bg-red-500 transition-colors">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                                </button>
+                            </div>
+                            <!-- Upload Button -->
+                            <label for="product-image-upload" class="flex flex-col items-center justify-center w-full h-24 border border-dashed border-green-500/30 rounded-lg cursor-pointer bg-green-500/5 hover:bg-green-500/10 transition-all hover:border-green-500/50">
+                                <div class="flex items-center gap-2 text-green-400">
+                                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
+                                    <span class="text-xs font-medium">Upload Product</span>
+                                </div>
+                                <input id="product-image-upload" type="file" class="hidden" accept="image/*" />
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Nail Art Upload (Conditional: Nail Mode) -->
+                    <div id="nail-upload-section" class="mt-4 pt-4 border-t border-gray-700 hidden">
+                        <label class="text-xs font-semibold text-rose-400 uppercase tracking-widest mb-2 block flex justify-between">
+                            <span>Hand / Nail Reference(s)</span>
+                            <span class="text-[9px] bg-rose-500/20 text-rose-300 px-1.5 py-0.5 rounded">Bulk Option Supported</span>
+                        </label>
+                        <div class="relative group">
+                            <!-- Preview Container (Scrollable for bulk) -->
+                            <div id="nail-image-preview-container" class="hidden relative w-full h-40 bg-black/40 rounded-lg overflow-hidden border border-gray-600 group-hover:border-gray-500 transition-colors">
+                                <!-- Inner scrollable list for multiple images -->
+                                <div id="nail-preview-list" class="flex gap-2 p-2 h-full overflow-x-auto scrollbar-thin"></div>
+                                
+                                <button id="clear-nail-image" class="absolute top-2 right-2 bg-black/70 text-white p-1.5 rounded-full hover:bg-red-500 transition-colors z-10">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                                </button>
+                            </div>
+                            <!-- Upload Button -->
+                            <label for="nail-image-upload" class="flex flex-col items-center justify-center w-full h-24 border border-dashed border-rose-500/30 rounded-lg cursor-pointer bg-rose-500/5 hover:bg-rose-500/10 transition-all hover:border-rose-500/50">
+                                <div class="flex items-center gap-2 text-rose-400">
+                                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
+                                    <span class="text-xs font-medium">Upload Hand Photo(s)</span>
+                                </div>
+                                <input id="nail-image-upload" type="file" class="hidden" accept="image/*" multiple />
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Standard Reference Upload (Image Mode only for now) -->
+                <div id="reference-upload-group" class="space-y-2">
+                     <div class="flex justify-between items-center">
+                        <label id="reference-image-label" class="text-xs font-semibold text-gray-400 uppercase tracking-widest">Reference Image</label>
+                        <span class="text-[10px] text-gray-600 bg-gray-800 px-2 py-0.5 rounded">Optional</span>
+                    </div>
+                    <div class="relative group">
+                         <!-- Preview -->
+                         <div id="reference-image-preview-container" class="hidden relative w-full h-40 bg-black/40 rounded-lg overflow-hidden border border-gray-600">
+                            <img id="reference-image-preview" class="w-full h-full object-contain p-2" alt="Reference" />
+                            <button id="clear-reference-image" class="absolute top-2 right-2 bg-black/70 text-white p-1.5 rounded-full hover:bg-red-500 transition-colors">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                            </button>
+                        </div>
+                        <!-- Upload Button -->
+                         <label for="reference-image-upload" class="flex flex-col items-center justify-center w-full h-24 border border-dashed border-gray-700 rounded-lg cursor-pointer bg-[#1c1e21] hover:bg-[#25282c] transition-all hover:border-gray-500">
+                            <div class="flex flex-col items-center justify-center py-4">
+                                <svg class="w-6 h-6 mb-2 text-gray-500 group-hover:text-blue-400 transition-colors" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                </svg>
+                                <p id="reference-upload-text" class="text-xs text-gray-500 group-hover:text-gray-300">Upload reference photo</p>
+                            </div>
+                            <input id="reference-image-upload" type="file" class="hidden" accept="image/*" />
+                        </label>
+                    </div>
+                    <p id="reference-help-text" class="text-[10px] text-gray-500 pt-1">Upload a photo to transform it or use your face in the generation.</p>
+                </div>
+
+                <!-- Watermark Section (NEW) -->
+                <div class="border-t border-gray-700 pt-4 mt-auto">
+                    <div class="flex items-center justify-between mb-2">
+                        <label class="text-xs font-semibold text-gray-400 uppercase tracking-widest">Watermark</label>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" id="watermark-toggle" class="sr-only peer">
+                            <div class="w-9 h-5 bg-gray-700 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-500 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
+                        </label>
+                    </div>
+
+                    <div id="watermark-controls" class="hidden space-y-3 bg-[#1c1e21] p-3 rounded-xl border border-gray-700">
+                        <!-- Type Selector -->
+                        <div class="flex gap-2 p-1 bg-black/20 rounded-lg">
+                            <button id="wm-type-text" class="flex-1 text-[10px] font-medium py-1.5 rounded bg-blue-500/20 text-blue-400 border border-blue-500/50 transition-all">Text</button>
+                            <button id="wm-type-image" class="flex-1 text-[10px] font-medium py-1.5 rounded text-gray-400 hover:text-white transition-all">Logo</button>
+                        </div>
+
+                        <!-- Inputs -->
+                        <div id="wm-text-input-container">
+                            <input type="text" id="wm-text" class="w-full bg-[#131416] border border-gray-600 rounded-lg px-3 py-2 text-xs text-white placeholder-gray-500 focus:border-blue-500 outline-none" placeholder="Enter watermark text">
+                        </div>
+                        <div id="wm-image-input-container" class="hidden">
+                             <div class="flex items-center gap-2">
+                                <label for="wm-image-upload" class="flex-1 cursor-pointer bg-[#131416] border border-gray-600 rounded-lg px-3 py-2 text-xs text-gray-400 hover:text-white truncate">
+                                    <span id="wm-filename">Upload Logo...</span>
+                                </label>
+                                <input type="file" id="wm-image-upload" class="hidden" accept="image/*">
+                                <img id="wm-preview" class="w-8 h-8 object-contain hidden border border-gray-600 rounded bg-black/50">
+                             </div>
+                        </div>
+
+                        <!-- Position & Opacity -->
+                        <div class="flex items-center gap-4">
+                             <div class="flex-1 space-y-1">
+                                <label class="text-[10px] text-gray-500 uppercase">Opacity</label>
+                                <input type="range" id="wm-opacity" min="0.1" max="1" step="0.1" value="0.5" class="w-full h-1 bg-gray-600 rounded-lg appearance-none cursor-pointer">
+                            </div>
+                             <div class="space-y-1">
+                                <label class="text-[10px] text-gray-500 uppercase">Position</label>
+                                <select id="wm-position" class="bg-[#131416] border border-gray-600 text-white text-[10px] rounded p-1 outline-none">
+                                    <option value="bottom-right">Bottom R</option>
+                                    <option value="bottom-left">Bottom L</option>
+                                    <option value="top-right">Top R</option>
+                                    <option value="top-left">Top L</option>
+                                    <option value="center">Center</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Generate Button -->
+                <div class="pt-4 mt-4">
+                    <button
+                        id="generate-button"
+                        class="w-full bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 hover:from-blue-500 hover:via-indigo-500 hover:to-purple-500 text-white font-bold py-4 px-6 rounded-xl transition-all duration-300 transform hover:scale-[1.02] active:scale-[0.98] shadow-lg shadow-blue-900/20 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none flex items-center justify-center space-x-3 group"
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="animate-pulse-slow"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L12 3Z"/><path d="M5 3v4"/><path d="M19 17v4"/><path d="M3 5h4"/><path d="M17 19h4"/></svg>
+                        <span id="generate-button-text" class="text-lg tracking-wide">Generate Artwork</span>
+                    </button>
+                    <div id="status" class="text-center text-xs text-gray-400 mt-3 font-medium min-h-[1.5em] transition-all"></div>
+                </div>
+
+            </div>
+          </div>
+          
+          <!-- Right Column: Output (7 columns wide) -->
+          <div class="lg:col-span-7 flex flex-col space-y-6">
+            
+            <!-- Output Container -->
+            <div class="bg-[#131416] border border-white/10 rounded-2xl p-4 md:p-6 shadow-xl backdrop-blur-sm min-h-[400px] md:min-h-[500px] flex flex-col items-center justify-center relative overflow-hidden group">
+                
+                <!-- Placeholder State -->
+                <div id="image-placeholder" class="text-center space-y-4 max-w-sm">
+                    <div class="w-20 h-20 mx-auto rounded-full bg-[#1c1e21] flex items-center justify-center border border-gray-700 shadow-inner">
+                         <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-gray-500"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                    </div>
+                    <div class="space-y-1">
+                        <h3 class="text-lg font-semibold text-white">Ready to Create</h3>
+                        <p class="text-sm text-gray-500">
+                            Select a mode, describe your vision, and watch Gemini 3 Pro bring it to life in seconds.
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Loader -->
+                <div id="image-loader" class="hidden flex flex-col items-center gap-6 z-10 w-full max-w-md px-8">
+                     <div class="glowing-orb-container">
+                        <div class="glowing-orb"></div>
+                        <div class="glowing-orb"></div>
+                        <div class="glowing-orb"></div>
+                    </div>
+                    
+                    <div class="w-full space-y-2">
+                        <div class="h-1.5 w-full bg-gray-800 rounded-full overflow-hidden">
+                            <div id="loading-progress-bar" class="h-full w-0 bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 transition-all duration-300 ease-out shadow-[0_0_10px_rgba(168,85,247,0.5)]"></div>
+                        </div>
+                         <p id="loading-text" class="text-center text-xs font-mono text-blue-300 uppercase tracking-widest animate-pulse">Initializing...</p>
+                    </div>
+                </div>
+
+                <!-- Output Image -->
+                <img id="output-image" class="hidden w-full h-full object-contain rounded-lg shadow-2xl transition-all duration-500" alt="Generated content" />
+
+                <!-- Output Video Player -->
+                <video id="output-video" class="hidden w-full h-full max-h-[600px] object-contain rounded-lg shadow-2xl bg-black" controls playsinline loop></video>
+
+                <!-- Bulk Results Container (New) -->
+                <div id="bulk-results-container" class="hidden w-full h-full absolute inset-0 bg-[#131416] p-4 overflow-y-auto scrollbar-thin">
+                    <div class="flex justify-between items-center mb-4 sticky top-0 bg-[#131416]/90 backdrop-blur pb-2 border-b border-gray-800 z-10">
+                         <h3 class="text-lg font-semibold text-white">Bulk Generation Queue</h3>
+                         <button id="bulk-download-button" class="hidden bg-green-600 hover:bg-green-500 text-white text-xs px-3 py-1.5 rounded-lg flex items-center gap-2 transition-all">
+                             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
+                             Download All (ZIP)
+                         </button>
+                    </div>
+                    <div id="bulk-list" class="space-y-2">
+                        <!-- Items injected via JS -->
+                    </div>
+                </div>
+
+
+                <!-- Actions Overlay -->
+                <div id="image-actions" class="absolute top-4 right-4 hidden flex items-center gap-2">
+                     <button id="remix-button" class="bg-black/60 hover:bg-black/80 backdrop-blur-md text-white p-2.5 rounded-full border border-white/10 transition-all hover:scale-105 shadow-lg group-action" title="Remix this image">
+                         <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+                    </button>
+                    <button id="upscale-button" class="bg-black/60 hover:bg-black/80 backdrop-blur-md text-white p-2.5 rounded-full border border-white/10 transition-all hover:scale-105 shadow-lg group-action" title="Upscale to 4K">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" x2="14" y1="3" y2="10"/><line x1="3" x2="10" y1="21" y2="14"/></svg>
+                    </button>
+                    <button id="download-button" class="bg-blue-600 hover:bg-blue-500 text-white p-2.5 rounded-full shadow-lg hover:shadow-blue-500/30 transition-all hover:scale-105 border border-white/10" title="Download">
+                         <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
+                    </button>
+                </div>
+
+            </div>
+
+             <!-- Edit Section (Image Mode Only) -->
+            <div id="edit-section" class="bg-[#131416] border border-white/10 rounded-2xl p-1 shadow-md backdrop-blur-sm flex items-center gap-2">
+                <input 
+                    type="text" 
+                    id="edit-prompt-input" 
+                    placeholder="Ask to edit the image (e.g., 'Make it sunset', 'Add a cat')..." 
+                    class="flex-1 bg-transparent border-none text-white placeholder-gray-500 focus:ring-0 px-4 py-3 text-sm"
+                />
+                <button id="edit-button" class="bg-white/10 hover:bg-white/20 text-white px-4 py-2 rounded-xl text-sm font-medium transition-colors m-1">
+                    Edit Image
+                </button>
+            </div>
+
+            <!-- History Strip -->
+            <div id="history-section" class="hidden">
+                 <div class="flex items-center justify-between mb-3 px-1">
+                    <h3 class="text-xs font-semibold text-gray-400 uppercase tracking-widest">Recent Creations</h3>
+                    <span class="text-[10px] text-gray-600">Saved locally</span>
+                </div>
+                <div id="history-container" class="flex gap-4 overflow-x-auto pb-4 scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-transparent">
+                    <!-- History items injected here -->
+                </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+      
+      <!-- Footer Banner -->
+      <div class="app-banner">
+        <div class="app-banner-content">
+            <div class="banner-left">
+                <span class="font-semibold text-gray-200">Gemini 3 Pro Studio</span>
+                <span class="text-gray-600">•</span>
+                <span class="text-xs">Powered by Google DeepMind</span>
+            </div>
+            <div class="remix-ideas">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-yellow-primary"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.1.2-2.2.5-3.3.3-1.09.91-2.195 2-3.2Zm1.6 3a2.5 2.5 0 0 0 5 0"/></svg>
+                <div class="remix-prompt"><span class="text-gray-500 text-xs">Try prompting:</span></div>
+                <div class="remix-text-container">
+                    <div id="remix-text" class="remix-text text-xs">"Cyberpunk street food stall..."</div>
+                </div>
+            </div>
+            <div class="banner-right banner-buttons">
+                <a href="https://ai.google.dev" target="_blank" class="banner-button button-gemini-chat">
+                   API Docs
+                </a>
+                <a href="https://aistudio.google.com" target="_blank" class="banner-button button-ai-studio">
+                    Get API Key
+                </a>
+            </div>
+        </div>
+      </div>
+
+    </div>
+  </body>
+</html>

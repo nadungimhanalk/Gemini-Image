@@ -1,0 +1,5 @@
+{
+  "name": "Gemini 3 Pro",
+  "description": "Generate high-quality images with Gemini 3 Pro and edit with Flash.",
+  "requestFramePermissions": []
+}
