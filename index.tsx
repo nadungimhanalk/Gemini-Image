@@ -62,6 +62,13 @@ function showStatusMessage(message: string) {
     }
 }
 
+function clearStatusMessage() {
+    if (statusEl) {
+        statusEl.innerText = '';
+        statusEl.className = 'text-center text-xs text-gray-400 mt-3 font-medium min-h-[1.5em]';
+    }
+}
+
 // --- Image Processing Helpers ---
 
 /**
@@ -445,7 +452,7 @@ async function generateVideo(
     const ai = new GoogleGenAI({apiKey});
     
     // Select Model: fast for text-only, standard for image-to-video/shop mode high quality
-    // 'veo-3.1-generate-preview' for Shop Mode (higher quality)
+    // 'veo-3.1-generate-preview' for Image-to-Video (including Shop Mode)
     // 'veo-3.1-fast-generate-preview' for Text-to-Video (speed)
     const model = imageBase64 ? 'veo-3.1-generate-preview' : 'veo-3.1-fast-generate-preview';
     
@@ -456,13 +463,14 @@ async function generateVideo(
     const config: any = {
         numberOfVideos: 1,
         resolution: resolution as any,
-        aspectRatio: safeAspectRatio as any
+        aspectRatio: safeAspectRatio as any,
+        safetySettings: permissiveSafetySettings // Apply safety settings here
     };
 
     let operation;
     
     if (imageBase64) {
-        // Shop Mode: Video from Image + Prompt
+        // Shop Mode or Standard Image-to-Video
         const match = imageBase64.match(/^data:(image\/[a-z]+);base64,(.+)$/);
         if (!match) throw new Error('Invalid image data.');
         
@@ -491,9 +499,15 @@ async function generateVideo(
         operation = await ai.operations.getVideosOperation({operation: operation});
     }
 
+    // Check for API errors in the operation object
+    if (operation.error) {
+        throw new Error(`Video generation failed: ${operation.error.message || 'Unknown error'}`);
+    }
+
     const videoUri = operation.response?.generatedVideos?.[0]?.video?.uri;
     if (!videoUri) {
-        throw new Error('Video generation completed but no URI returned.');
+        console.warn("Video Operation Missing URI:", operation);
+        throw new Error('Video generation completed without a video link. This is likely due to a safety block by the model. Please try a simpler prompt or a different reference image.');
     }
 
     // Proxy the download to get a usable blob URL
@@ -753,6 +767,9 @@ function startLoadingAnimation(isVideo = false) {
   
   const messages = isVideo ? videoLoadingMessages : loadingMessages;
   
+  // Clear any previous status/errors at start
+  clearStatusMessage();
+
   // Reset Progress Bar
   updateProgressBar(0);
 
@@ -820,7 +837,7 @@ function stopLoadingAnimation() {
       generateButton.disabled = false;
       generateButton.classList.remove('opacity-50', 'cursor-not-allowed');
   }
-  if(statusEl) statusEl.innerText = '';
+  // Removed status clearing here to allow errors to remain visible
 }
 
 // --- File Handling ---
@@ -988,6 +1005,12 @@ function updateMediaTypeUI(type: MediaType) {
         if(imageSizeControl) imageSizeControl.classList.remove('hidden');
         if(videoResControl) videoResControl.classList.add('hidden');
         if(referenceUploadGroup) referenceUploadGroup.classList.remove('hidden');
+        
+        // Reset reference text
+        if(referenceImageLabel) referenceImageLabel.innerText = "Reference Image";
+        if(referenceUploadText) referenceUploadText.innerText = "Upload reference photo";
+        if(referenceHelpText) referenceHelpText.innerText = "Upload a photo to transform it or use your face.";
+
         if(editSection) editSection.classList.remove('hidden');
         if(generateButtonText) generateButtonText.innerText = "Generate Artwork";
         if(promptEl) promptEl.placeholder = "Describe your imagination...";
@@ -1020,7 +1043,14 @@ function updateMediaTypeUI(type: MediaType) {
         // Show Video Controls
         if(imageSizeControl) imageSizeControl.classList.add('hidden');
         if(videoResControl) videoResControl.classList.remove('hidden');
-        if(referenceUploadGroup) referenceUploadGroup.classList.add('hidden'); // No generic ref for video yet
+        
+        // Handle Reference Upload for Video (Standard vs Shop logic handled in listener)
+        // Default to Standard Video, which now supports Image-to-Video
+        if(referenceUploadGroup) referenceUploadGroup.classList.remove('hidden');
+        if(referenceImageLabel) referenceImageLabel.innerText = "Start Frame (Image-to-Video)";
+        if(referenceUploadText) referenceUploadText.innerText = "Upload starting image";
+        if(referenceHelpText) referenceHelpText.innerText = "Veo will animate this image based on your prompt.";
+
         if(editSection) editSection.classList.add('hidden'); // No edit for video
         if(generateButtonText) generateButtonText.innerText = "Generate Video";
         if(promptEl) promptEl.placeholder = "Describe a cinematic scene with movement, lighting, and action...";
@@ -1268,7 +1298,14 @@ modeRadios.forEach((radio) => {
              if(promptEl) promptEl.placeholder = "Enter prompt 1\nEnter prompt 2\nEnter prompt 3...";
              if(referenceUploadGroup) referenceUploadGroup.classList.add('hidden');
              if(editSection) editSection.classList.add('hidden');
+        } else if (mode === 'video-standard') {
+             // Standard Video (Image-to-Video)
+             if(referenceUploadGroup) referenceUploadGroup.classList.remove('hidden');
+             if(referenceImageLabel) referenceImageLabel.innerText = "Start Frame (Image-to-Video)";
+             if(referenceUploadText) referenceUploadText.innerText = "Upload starting image";
+             if(referenceHelpText) referenceHelpText.innerText = "Veo will animate this image based on your prompt.";
         } else {
+             // Standard Image
              if(referenceUploadGroup) referenceUploadGroup.classList.remove('hidden');
              if(editSection) editSection.classList.remove('hidden');
              if(promptEl) promptEl.placeholder = "Describe your imagination...";
@@ -1557,8 +1594,9 @@ if (generateButton) {
                 const shopPrompt = `Cinematic product showcase video. ${finalVideoPrompt}. High production value, professional lighting.`;
                 videoUrl = await generateVideo(shopPrompt, productImageBase64, apiKey, aspectRatio, videoRes);
             } else {
-                // Standard Text to Video
-                videoUrl = await generateVideo(finalVideoPrompt, null, apiKey, aspectRatio, videoRes);
+                // Standard Text to Video (now supports Image-to-Video via Reference)
+                // Pass referenceImageBase64 if available (Image-to-Video) or null (Text-to-Video)
+                videoUrl = await generateVideo(finalVideoPrompt, referenceImageBase64, apiKey, aspectRatio, videoRes);
             }
 
             if(outputVideo) {
